@@ -7,6 +7,7 @@ const app = express();
 let server = http.createServer(app);  
 let io = socketio(server);
 
+//Instantiate all socket io logics
 websocket(io);
 
 server.listen(process.env.PORT || 4240);
