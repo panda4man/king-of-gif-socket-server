@@ -1,111 +1,122 @@
-var crypto = require('crypto-random-string');
-var players = [];
-var rooms = [];
+import crypto from 'crypto-random-string'
+import Player from '../models/player'
+import Room from '../models/room'
 
-function IO(io) {
-    io.on('connection', function(socket) {
+let players = [];
+let rooms = [];
+
+const IO = (io) => {
+    io.on('connection', (socket) => {
         console.log(socket.id);
 
         //Host trying to create a new game
-        socket.on('game-create', function() {
-            var roomCode = crypto(5);
-
-            rooms.push({ code: roomCode, limit: 12 });
-            players.push({
-                isHost: true,
-                id: socket.id,
+        socket.on('game-create', () => {
+            let roomCode = crypto(5);
+            let room = Room.create({ code: roomCode, limit: 12 });
+            let player = Player.create({
+                is_host: true,
+                socket_id: socket.id,
                 username: null,
                 room: roomCode
             });
+
+            rooms.push(room);
+            players.push(player);
 
             socket.join(roomCode);
             socket.emit('game-created', roomCode);
         });
 
-        //Player trying to join a game lobby
-        socket.on('room-join', function(data) {
-        	var room = rooms.filter(function (r) {
-        		return r.code === data.roomCode;
-        	});
+        //Player trying to join a game room
+        socket.on('room-join', (data) => {
+            let room = rooms.filter(r => {
+                return r.code === data.roomCode;
+            });
 
-        	//See if room exists
-        	if(room && room.length) {
-        		room = room[0];
+            //See if room exists
+            if(room && room.length) {
+                room = room[0];
 
-        		var roomHost = players.filter(function (p) {
-        			return p.room === room.code && p.isHost;
-        		});
+                let roomHost = players.filter(p => {
+                    return p.room === room.code && p.is_host;
+                });
 
-        		//Make sure the room has a host
-        		if(roomHost && roomHost.length) {
-        			var roomPlayers = players.filter(function (p) {
-        				return p.room === room.code && !p.isHost;
-        			});
+                //Make sure the room has a host
+                if(roomHost && roomHost.length) {
+                    let roomPlayers = players.filter(p => {
+                        return p.room === room.code && !p.is_host;
+                    });
 
-        			//Check if room is already full
-        			if(roomPlayers && roomPlayers.length == room.limit) {
-        				socket.emit('room-full');
-        			} else {
-        				players.push({
-			                isHost: false,
-			                id: socket.id,
-			                username: data.username,
-			                room: room.code
-			            });
+                    //Check if room is already full
+                    if(roomPlayers && roomPlayers.length == room.limit) {
+                        socket.emit('room-full');
+                    } else {
+                        let player = Player.create({
+                            is_host: false,
+                            socket_id: socket.id,
+                            username: data.username,
+                            room: room.code
+                        });
 
-		        		console.log('Players in room: ' + room.code);
-			            console.log(players);
+                        players.push(player);
 
-			            socket.join(room.code);
-			            socket.emit('room-joined');
-        			}
-        		} else {
-        			socket.emit('room-no-host');
-        		}
-        	} else {
-        		socket.emit('room-404');
-        	}
+                        console.log('Players in room: ' + room.code);
+                        console.log(players);
+
+                        socket.join(room.code);
+                        socket.emit('room-joined');
+                    }
+                } else {
+                    socket.emit('room-no-host');
+                }
+            } else {
+                socket.emit('room-404');
+            }
         });
 
-        //Player left the lobby
-        socket.on('room-left', function (roomCode) {
-        	let player = null;
+        //Player left the room
+        socket.on('room-left', roomCode => {
+            let player = null;
 
-        	//Remove the player from the players list
-        	players = players.filter(function (p) {
-        		if(p.id === socket.id)
-        			player = p;
+            //Remove the player from the players list
+            players = players.filter(p => {
+                if(p.socket_id === socket.id)
+                    player = p;
 
-        		return p.id !== socket.id;
-        	});
+                return p.socket_id !== socket.id;
+            });
 
-        	//Clean up empty rooms
-        	roomPlayers = players.filter(function (p) {
-        		return p.room === roomCode;
-        	});
+            //Clean up empty rooms
+            let roomPlayers = players.filter(p => {
+                return p.room === roomCode;
+            });
 
-        	if(!roomPlayers || roomPlayers.length == 0) {
-        		rooms = rooms.filter(function (r) {
-        			return r.code !== roomCode;
-        		});
-        	}
+            if(!roomPlayers || roomPlayers.length == 0) {
+                rooms = rooms.filter(r => {
+                    return r.code !== roomCode;
+                });
+            }
 
-        	//if player is the host notify everyone else
-        	if(player && player.isHost) {
-        		console.log('The host left room: ' + roomCode);
-        		socket.to(player.room).emit('host-left');
-        	} else {
-        		console.log('A player left the room: ' + roomCode);
-        	}
+            if(player) {
+                if(player.is_host) {
+                    console.log('The host left room: ' + roomCode);
 
-        	//leave the room
-        	socket.leave(roomCode);
+                    socket.to(player.room).emit('host-left');
+                } else {
+                    console.log('A player left the room: ' + roomCode);
+
+                    socket.to(player.room).emit('player-left', roomPlayers);
+                }
+            }
+
+            //leave the room
+            socket.leave(roomCode);
         });
 
-        //Player successfully landed in the lobby
-        socket.on('lobby-joined', function() {
-            var player = players.filter(function(p) {
-                return p.id === socket.id;
+        //Player successfully landed in the room
+        socket.on('room-joined', (roomCode) => {
+            let player = players.filter(p => {
+                return p.socket_id === socket.id;
             });
 
             if (player.length) {
@@ -115,11 +126,20 @@ function IO(io) {
             }
 
             if (player !== null) {
-                socket.emit('lobby-joined-confirmed', player);
-                socket.to(player.room).emit('player-joined', player);
+                let roomPlayers = players.filter(p => {
+                    return p.room == roomCode;
+                });
+
+                console.log('room players');
+                console.log(roomPlayers);
+
+                socket.emit('room-joined-confirmed', roomPlayers);
+                socket.to(player.room).emit('player-joined', roomPlayers);
+            } else {
+                socket.emit('room-joined-404');
             }
         });
     });
 }
 
-module.exports = IO;
+export default IO
