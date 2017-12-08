@@ -1,67 +1,52 @@
-import crypto from 'crypto-random-string'
-import Player from '../models/player'
-import Room from '../models/room'
+import RoomRepository from '../repositories/room-repo'
+import PlayerRepository from '../repositories/player-repo'
 
 let players = [];
 let rooms = [];
 
 const IO = (io) => {
+    let roomRepo = new RoomRepository(rooms);
+    let playerRepo = new PlayerRepository(players);
+
     io.on('connection', (socket) => {
         console.log(socket.id);
 
         //Host trying to create a new game
         socket.on('game-create', () => {
-            let roomCode = crypto(5);
-            let room = Room.create({ code: roomCode, limit: 12 });
-            let player = Player.create({
+            let room = roomRepo.create({limit: 12 });
+            playerRepo.create({
                 is_host: true,
                 socket_id: socket.id,
                 username: null,
-                room: roomCode
+                room: room.code
             });
 
-            rooms.push(room);
-            players.push(player);
-
-            socket.join(roomCode);
-            socket.emit('game-created', roomCode);
+            socket.join(room.code);
+            socket.emit('game-created', room.code);
         });
 
         //Player trying to join a game room
         socket.on('room-join', (data) => {
-            let room = rooms.filter(r => {
-                return r.code === data.roomCode;
-            });
+            let room = roomRepo.findByCode(data.roomCode);
 
             //See if room exists
-            if(room && room.length) {
-                room = room[0];
-
-                let roomHost = players.filter(p => {
-                    return p.room === room.code && p.is_host;
-                });
+            if(room) {
+                let roomHost = playerRepo.findRoomHost(room.code);
 
                 //Make sure the room has a host
-                if(roomHost && roomHost.length) {
-                    let roomPlayers = players.filter(p => {
-                        return p.room === room.code && !p.is_host;
-                    });
+                if(roomHost) {
+                    let roomPlayers = playerRepo.findByRoom(room.code);
 
                     //Check if room is already full
-                    if(roomPlayers && roomPlayers.length == room.limit) {
+                    if(roomPlayers.length == room.limit) {
                         socket.emit('room-full');
                     } else {
-                        let player = Player.create({
+                        let player = playerRepo.create({
                             is_host: false,
                             socket_id: socket.id,
                             username: data.username,
                             room: room.code
                         });
-
-                        players.push(player);
-
-                        console.log('Players in room: ' + room.code);
-                        console.log(players);
 
                         socket.join(room.code);
                         socket.emit('room-joined');
@@ -76,25 +61,15 @@ const IO = (io) => {
 
         //Player left the room
         socket.on('room-left', roomCode => {
-            let player = null;
+            let player = playerRepo.findOneBySocket(socket.id);
 
-            //Remove the player from the players list
-            players = players.filter(p => {
-                if(p.socket_id === socket.id)
-                    player = p;
+            playerRepo.destroy(socket.id);
 
-                return p.socket_id !== socket.id;
-            });
+            let roomPlayers = playerRepo.findByRoom(roomCode);
 
             //Clean up empty rooms
-            let roomPlayers = players.filter(p => {
-                return p.room === roomCode;
-            });
-
-            if(!roomPlayers || roomPlayers.length == 0) {
-                rooms = rooms.filter(r => {
-                    return r.code !== roomCode;
-                });
+            if(roomPlayers.length == 0) {
+                roomRepo.destroy(roomCode);
             }
 
             if(player) {
@@ -115,23 +90,10 @@ const IO = (io) => {
 
         //Player successfully landed in the room
         socket.on('room-joined', (roomCode) => {
-            let player = players.filter(p => {
-                return p.socket_id === socket.id;
-            });
-
-            if (player.length) {
-                player = player[0];
-            } else {
-                player = null;
-            }
+            let player = playerRepo.findOneBySocket(socket.id);
 
             if (player !== null) {
-                let roomPlayers = players.filter(p => {
-                    return p.room == roomCode;
-                });
-
-                console.log('room players');
-                console.log(roomPlayers);
+                let roomPlayers = playerRepo.findByRoom(roomCode, true);
 
                 socket.emit('room-joined-confirmed', roomPlayers);
                 socket.to(player.room).emit('player-joined', roomPlayers);
