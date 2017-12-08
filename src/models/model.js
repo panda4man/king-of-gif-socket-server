@@ -1,6 +1,7 @@
 export default class Model {
-	construct() {
+	constructor() {
 		this.fillable = [];
+		this.hidden = ['fillable'];
 	}
 
 	fill(attributes = {}) {
@@ -11,6 +12,18 @@ export default class Model {
 		}
 
 		return this;
+	}
+
+	toJson() {
+		let data = {};
+
+		for(let k in this) {
+			if(this.hidden.indexOf(k) == -1) {
+				data[k] = this[k];
+			}
+		}
+
+		return data;
 	}
 
 	static create(attributes = {}) {
