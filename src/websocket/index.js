@@ -63,9 +63,8 @@ const IO = (io) => {
         socket.on('room-left', roomCode => {
             let player = playerRepo.findOneBySocket(socket.id);
 
-            playerRepo.destroy(socket.id);
-
-            let roomPlayers = playerRepo.findByRoom(roomCode);
+            let success = playerRepo.destroy(socket.id);
+            let roomPlayers = playerRepo.findByRoom(roomCode, true);
 
             //Clean up empty rooms
             if(roomPlayers.length == 0) {
@@ -99,6 +98,32 @@ const IO = (io) => {
                 socket.to(player.room).emit('player-joined', roomPlayers);
             } else {
                 socket.emit('room-joined-404');
+            }
+        });
+
+        //First player wants to start the game
+        socket.on('game-start', (roomCode) => {
+            io.in(roomCode).emit('game-starting');
+        });
+
+        //Disconnected
+        socket.on('disconnect', () => {
+            console.log('Someone disconnected');
+            let player = playerRepo.findOneBySocket(socket.id);
+            let success = playerRepo.destroy(socket.id);
+
+            if(player) {
+                let roomPlayers = playerRepo.findByRoom(player.room, true);
+
+                if(player.is_host) {
+                    console.log('The host left room: ' + player.room);
+
+                    socket.to(player.room).emit('host-left');
+                } else {
+                    console.log('A player left the room: ' + player.room);
+
+                    socket.to(player.room).emit('player-left', roomPlayers);
+                }
             }
         });
     });
