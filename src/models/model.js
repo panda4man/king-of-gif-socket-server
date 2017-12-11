@@ -1,8 +1,7 @@
 export default class Model {
 	constructor() {
 		this.fillable = [];
-		this.hidden = ['fillable', 'defaults'];
-		this.defaults = {};
+		this.hidden = ['fillable'];
 	}
 
 	fill(attributes = {}) {
