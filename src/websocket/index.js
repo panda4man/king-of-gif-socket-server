@@ -1,12 +1,15 @@
 import RoomRepository from '../repositories/room-repo'
 import PlayerRepository from '../repositories/player-repo'
+import GameRepository from '../repositories/game-repo'
 
 let players = [];
 let rooms = [];
+let games = [];
 
 const IO = (io) => {
     let roomRepo = new RoomRepository(rooms);
     let playerRepo = new PlayerRepository(players);
+    let gameRepo = new GameRepository(games);
 
     io.on('connection', (socket) => {
         console.log(socket.id);
@@ -103,7 +106,57 @@ const IO = (io) => {
 
         //First player wants to start the game
         socket.on('game-start', (roomCode) => {
-            io.in(roomCode).emit('game-starting');
+            let g = gameRepo.create({room: roomCode});
+
+            //Tell all room participants the game is starting
+            io.in(roomCode).emit('game-starting', {gameId: g.id});
+        });
+
+        //Someone joined the game
+        socket.on('game-joined', (gameId) => {
+            let game = gameRepo.findById(gameId);
+            let player = playerRepo.findOneBySocket(socket.id);
+
+            if(!game || !player) {
+                socket.emit('game-joined-404');
+
+                return false;
+            }
+
+            if(game.room !== player.room) {
+                socket.emit('game-joined-400', {error: 'You do not belong to this game\'s room'});
+
+                return false;
+            }
+
+            let alreadyJoined = gameRepo.playerJoined(game, player);
+
+            if(!alreadyJoined) {
+                let success = gameRepo.joinGame(game.id, player);
+
+                if(success) {
+                    game = gameRepo.findById(gameId);
+
+                    socket.emit('game-joined-success', game);
+                } else {
+                    socket.emit('game-joined-400', {error: 'Could not join the game'});
+                }
+            } else {
+                socket.emit('game-joined-success');
+            }
+        });
+
+        //Client wants to know it's player data
+        socket.on('player-get', (gameId) => {
+            let player = playerRepo.findOneBySocket(socket.id);
+            let game = gameRepo.findById(gameId);
+            let gamePlayer = game.players.filter(p => p.socket_id === player.socket_id);
+
+            if(gamePlayer.length) {
+                socket.emit('player-got', player);
+            } else {
+                socket.emit('player-got-404');
+            }
         });
 
         //Disconnected
