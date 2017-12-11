@@ -106,7 +106,7 @@ const IO = (io) => {
 
         //First player wants to start the game
         socket.on('game-start', (roomCode) => {
-            let g = gameRepo.create({room: roomCode});
+            let g = gameRepo.create({room: roomCode, io: io});
 
             //Tell all room participants the game is starting
             io.in(roomCode).emit('game-starting', {gameId: g.id});
