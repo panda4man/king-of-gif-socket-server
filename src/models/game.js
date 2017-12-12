@@ -26,7 +26,7 @@ export default class Game extends Model {
 			responsesCompleted: false,
 			completed: false,
 			votesTimer: null,
-			votesTimerVal: null
+			votesTimerVal: null,
 			votesSubmitted: false,
 			votes: []
 		};
