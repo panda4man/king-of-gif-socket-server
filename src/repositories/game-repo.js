@@ -1,4 +1,5 @@
 import Game from '../models/game'
+import Question from '../models/question'
 
 export default class GameRepository {
 	constructor(games) {
@@ -72,5 +73,30 @@ export default class GameRepository {
 		});
 
 		return found.length;
+	}
+
+	/**
+	 * Add a question to a game round
+	 * 
+	 * @param {[type]} gameId  
+	 * @param {[type]} questionData
+	 * @param {[type]} round   
+	 */
+	addQuestion(gameId, questionData, round) {
+		let i = null, found = false;
+
+		for(i = 0; i < this.games.length; i++) {
+			if(this.games[i].id === gameId) {
+				break;
+			}
+		}
+
+		if(i !== null) {
+			found = true;
+			let q = Question.create(questionData);
+			this.games[i].rounds[round].questions.push(q);
+		}
+
+		return found;
 	}
 }

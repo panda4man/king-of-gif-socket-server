@@ -44,7 +44,11 @@ export default class Game extends Model {
 			responesTimerVal: null,
 			responsesSubmitted: false,
 			responsesCompleted: false,
-			completed: false
+			completed: false,
+			votesTimer: null,
+			votesTimerVal: null,
+			votesSubmitted: false,
+			votes: []
 		};
 
 		this.rounds.push(roundOne);

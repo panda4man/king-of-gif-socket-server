@@ -1,6 +1,7 @@
 import RoomRepository from '../repositories/room-repo'
 import PlayerRepository from '../repositories/player-repo'
 import GameRepository from '../repositories/game-repo'
+import Question from '../models/question'
 
 let players = [];
 let rooms = [];
@@ -137,7 +138,7 @@ const IO = (io) => {
                 if(success) {
                     game = gameRepo.findById(gameId);
 
-                    socket.emit('game-joined-success', game);
+                    socket.emit('game-joined-success');
                 } else {
                     socket.emit('game-joined-400', {error: 'Could not join the game'});
                 }
@@ -156,6 +157,19 @@ const IO = (io) => {
                 socket.emit('player-got', player);
             } else {
                 socket.emit('player-got-404');
+            }
+        });
+
+        //Submitting an initial question
+        socket.on('question-submit', (data) => {
+            data['player_id'] = socket.id;
+
+            let success = gameRepo.addQuestion(data.gameId, data, data.round);
+
+            if(success) {
+                socket.emit('question-submit-success');
+            } else {
+                socket.emit('question-submit-400');
             }
         });
 
